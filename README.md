@@ -1,6 +1,3 @@
-element { 
-  font-size: 75; Climate Change in Austria: Precipitation and Dry Spells over 50 years
-}
 
 Climate Change in Austria: Precipitation and Dry Spells over 50 years
 
