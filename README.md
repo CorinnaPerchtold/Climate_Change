@@ -16,6 +16,6 @@ The file 00_prediction_stack.R contains the prediction grid based on the elevati
 
 In 00_prediction_stack_stack.R you find everything for the stationary prediction setup. The stationary versions are necessary for model comparison.
 
-The return value functions for the bgev distribution were taken from https://github.com/siliusmv/inlaBGEV and can be found in 00_return_values.R
+The return value functions for the bgev distribution were taken from https://github.com/siliusmv/inlaBGEV and can be found in 00_functions_return_values.R
 
-The plot files apply the respective link function to the model results and then we compute difference maps and show the plot.
+The plot files apply the respective link function to the model results and then we compute difference maps and show the plot. For the bgev distribution this file is called 00_return_values_bgev.R.
