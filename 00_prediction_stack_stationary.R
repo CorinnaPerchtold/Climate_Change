@@ -9,7 +9,7 @@ library(raster)
 
 load("01_rain_data.R")
 load("01_elev_data.R")
-load("01_stack.R")
+load("01_stack_stat.R")
 
 
 #elevation map
@@ -56,7 +56,7 @@ tail.x_late<-null.matrix_late_pred
 pred.points <- cbind(dp$Longitude,dp$Latitude)
 
 #observation matrix
-A.pred<-inla.spde.make.A(mesh,loc=pred.points, group=dp$Month)
+A.pred<-inla.spde.make.A(mesh,loc=pred.points, group=dp$Month, alpha=2)
 
 #response is set to NA at prediction points
 obs.data_pred<- data.frame(matrix(data=NA, ncol=5, nrow=length(dp$Longitude)))
@@ -97,5 +97,5 @@ save(dp, A.pred,
      spread.x_early, spread.x_late, tail.x_early,tail.x_late, 
      stack_early_pred, stack_late_pred, 
      stack_max_early_pred, stack_max_late_pred, 
-     file="01_prediction_stack.R")
+     file="01_prediction_stack_stat.R")
 

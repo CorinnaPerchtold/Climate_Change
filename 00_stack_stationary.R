@@ -5,12 +5,13 @@ library(parallel)
 library(sp)
 library(dplyr)
 library(tidyverse)
+library(raster)
 
 load("01_elev_data.R")
 load("01_rain_data.R")
 
 #################################################
-#in this file:  set up observation matrix, non-stationary spde, stack and formulas
+#in this file:  set up observation matrix, stationary spde, stack and formulas
 #grouping: according to Month
 #bgev: arrangements for bgev distribution are included
 #also check (inla.doc("bgev"))
@@ -24,20 +25,17 @@ A_late<-inla.spde.make.A(mesh, loc=as.matrix(temp_late[,c('Longitude','Latitude'
                          group = temp_late$Month)
 
 #define non-stationary spde
-spde.nonstat<-inla.spde2.matern(mesh, B.tau=cbind(0, 0, 0, 1, values_on_mesh), #first col offset
-                                B.kappa=cbind(0, 1, values_on_mesh, 0, 0),
-                                theta.prior.mean=rep(0,4),#c(-4,0,4,0),
-                                theta.prior.prec=rep(1,4))
+spde.stat<-inla.spde2.matern(mesh, alpha=2)
 
-index<- inla.spde.make.index("spatial_field", n.spde=spde.nonstat$n.spde)
+index<-inla.spde.make.index("spatial_field", n.spde=spde.stat$n.spde)
 
 #index for mean precipitation
-index_mean<- inla.spde.make.index("spatio_temporal_field", n.spde=spde.nonstat$n.spde, 
-                                  n.group = dim(A_early)[2]/spde.nonstat$n.spde)
+index_mean<- inla.spde.make.index("spatio_temporal_field", n.spde=spde.stat$n.spde, 
+                                  n.group = dim(A_early)[2]/spde.stat$n.spde)
 
 #oindex for maximum precipitation
-index_max<- inla.spde.make.index("spatio_temporal_field", n.spde=spde.nonstat$n.spde,
-                                 n.group = dim(A_early)[2]/spde.nonstat$n.spde)
+index_max<- inla.spde.make.index("spatio_temporal_field", n.spde=spde.stat$n.spde,
+                                 n.group = dim(A_early)[2]/spde.stat$n.spde)
 
 #separate response variable from fixed effects
 obs.data_early <- dplyr::select(temp_early, starts_with('Rain'))
@@ -49,8 +47,7 @@ covars.data_late <-dplyr::select(temp_late, -starts_with('Rain'))
 #stack for mean precipitation in early and late time period 
 stack_early<-inla.stack(data=obs.data_early,
                         A=list(A_early,1),
-                        effects=list(c(index,index_mean, 
-                                       list(Intercept=1)),
+                        effects=list(c(index,index_mean, list(Intercept=1)),
                                      list(covars.data_early)),
                         tag="mean_early")
 
@@ -75,16 +72,19 @@ stack_max_late<-inla.stack(data=obs.data_late,
 
 
 #formulas for mean precipitation, for days without rain, for the lenght of dry spells
-formula4_mean<-Rain_mean ~ -1+Intercept+Latitude.cent+Longitude.cent+Elevation+f(spatial_field, model=spde.nonstat)+
-  f(spatio_temporal_field,model=spde.nonstat, group = spatio_temporal_field.group, 
+formula4_mean<-Rain_mean ~ -1+Intercept+Latitude.cent+Longitude.cent+Elevation+
+  f(spatial_field, model=spde.stat)+
+  f(spatio_temporal_field,model=spde.stat, group = spatio_temporal_field.group, 
     control.group = list(model="ar1"))
 
-formula4_min<- Rain_no_days~ -1 +Intercept + Latitude.cent+Longitude.cent+Elevation+f(spatial_field, model=spde.nonstat)+
-  f(spatio_temporal_field,model=spde.nonstat, group = spatio_temporal_field.group, 
+formula4_min<- Rain_no_days~ -1 +Intercept + Latitude.cent+Longitude.cent+Elevation+
+  f(spatial_field, model=spde.stat)+
+  f(spatio_temporal_field,model=spde.stat, group = spatio_temporal_field.group, 
     control.group = list(model="ar1"))
 
-formula4_dry_spell<-Rain_no_length~ -1 +Intercept + Latitude.cent+Longitude.cent+Elevation+f(spatial_field, model=spde.nonstat)+
-  f(spatio_temporal_field,model=spde.nonstat, group = spatio_temporal_field.group, 
+formula4_dry_spell<-Rain_no_length~ -1 +Intercept + Latitude.cent+Longitude.cent+Elevation+
+  f(spatial_field, model=spde.stat)+
+  f(spatio_temporal_field,model=spde.stat, group = spatio_temporal_field.group, 
     control.group = list(model="ar1"))
 
 #functions for bgev distribution
@@ -131,11 +131,6 @@ hyper.tail <-  list(initial = if (tail == 0.0) -Inf else tail.intern,
 hyper.bgev<- list(spread=hyper.spread,
                   tail=hyper.tail)
 
-hyper.bgev<- list(spread=hyper.spread,
-                  tail=hyper.tail)
-                  #beta1=list(prior="normal", param=c(0,300), initial=0 ),
-                  #beta2=list(prior="normal", param=c(0,300), initial=0 ))
-
 control.bgev<- list(q.location = 0.5,
                     q.spread = 0.8,   #choose =0.8 the higher the more numerically stable
                     # quantile levels for the mixing part
@@ -145,19 +140,21 @@ control.bgev<- list(q.location = 0.5,
                     beta.ab = 5)
 
 formula4_max_early<-inla.mdata(Rain_max, spread.x_early, tail.x_early) ~ -1+Intercept +Latitude.cent+Longitude.cent+Elevation+
-  f(spatial_field, model=spde.nonstat)+ f(spatio_temporal_field, model=spde.nonstat, group = spatio_temporal_field.group, 
+  f(spatial_field, model=spde.stat)+
+  f(spatio_temporal_field, model=spde.stat, group = spatio_temporal_field.group, 
     control.group = list(model="ar1"))
 
 formula4_max_late<-inla.mdata(Rain_max, spread.x_late, tail.x_late) ~ -1+Intercept +Latitude.cent+Longitude.cent+Elevation+ 
-  f(spatial_field, model=spde.nonstat)+ f(spatio_temporal_field, model=spde.nonstat, group = spatio_temporal_field.group, 
+  f(spatial_field, model=spde.stat)+
+  f(spatio_temporal_field, model=spde.stat, group = spatio_temporal_field.group, 
     control.group = list(model="ar1"))
 
-save(spde.nonstat, 
+save(spde.stat, 
      stack_early, stack_late, stack_max_early, stack_max_late,
      formula4_mean, formula4_min, formula4_max_early, formula4_max_late, formula4_dry_spell,
      obs.data_early, obs.data_late, covars.data_early, covars.data_late,
      index_mean, index_max,
      hyper.bgev,control.bgev, 
      spread.x_early,tail.x_early,tail.x_late,  spread.x_late, 
-      file="01_stack.R")
+     file="01_stack_stat.R")
 
